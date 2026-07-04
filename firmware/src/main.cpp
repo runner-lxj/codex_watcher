@@ -1,11 +1,9 @@
-﻿#include <Arduino.h>
+#include <Arduino.h>
 
 // ======================== 引脚配置 ========================
 #define PIN_GREEN_LED   13
 #define PIN_YELLOW_LED  12
 #define PIN_RED_LED     14
-#define PIN_BUZZER      27
-#define PIN_POTENTIOMETER 26
 
 #define BLINK_FAST_MS    200
 #define BLINK_SLOW_MS    500
@@ -18,12 +16,6 @@ unsigned long lastBlinkTime = 0;
 bool blinkOn = false;
 String inputBuffer = "";
 
-// ======================== 电位器读取 ========================
-int readVolumePercent() {
-  int raw = analogRead(PIN_POTENTIOMETER);
-  return map(raw, 0, 4095, 0, 100);
-}
-
 // ======================== LED 控制 ========================
 void allLedsOff() {
   digitalWrite(PIN_GREEN_LED, LOW);
@@ -34,17 +26,12 @@ void ledGreen(bool on)  { digitalWrite(PIN_GREEN_LED, on ? HIGH : LOW); }
 void ledYellow(bool on) { digitalWrite(PIN_YELLOW_LED, on ? HIGH : LOW); }
 void ledRed(bool on)    { digitalWrite(PIN_RED_LED, on ? HIGH : LOW); }
 
-// ======================== 蜂鸣器控制 (低电平触发) ========================
-void buzzerOn()  { digitalWrite(PIN_BUZZER, HIGH); }
-void buzzerOff() { digitalWrite(PIN_BUZZER, LOW); }
-
 // ======================== 状态切换 ========================
 void setState(State newState) {
   currentState = newState;
   blinkOn = false;
   lastBlinkTime = millis();
   allLedsOff();
-  buzzerOff();
   if (newState == STATE_RUNNING) ledGreen(true);
 }
 
@@ -58,10 +45,8 @@ void handleCommand(String cmd) {
   else if (cmd == "ERROR")    { setState(STATE_ERROR);   Serial.println("OK:ERROR"); }
   else if (cmd == "IDLE")     { setState(STATE_IDLE);    Serial.println("OK:IDLE"); }
   else if (cmd == "STATUS") {
-    int vol = readVolumePercent();
     String states[] = {"IDLE", "RUNNING", "WAITING", "DONE", "ERROR"};
-    Serial.print("STATE:"); Serial.print(states[currentState]);
-    Serial.print(",VOL:"); Serial.println(vol);
+    Serial.print("STATE:"); Serial.println(states[currentState]);
   } else if (cmd == "PING") { Serial.println("PONG"); }
   else { Serial.print("ERR:UNKNOWN_CMD:"); Serial.println(cmd); }
 }
@@ -74,9 +59,6 @@ void setup() {
   pinMode(PIN_GREEN_LED, OUTPUT);
   pinMode(PIN_YELLOW_LED, OUTPUT);
   pinMode(PIN_RED_LED, OUTPUT);
-  pinMode(PIN_BUZZER, OUTPUT);
-  gpio_set_pull_mode((gpio_num_t)PIN_BUZZER, GPIO_PULLDOWN_ONLY);
-  digitalWrite(PIN_BUZZER, LOW);
 
   allLedsOff();
   setState(STATE_IDLE);
@@ -86,17 +68,18 @@ void loop() {
   unsigned long now = millis();
 
   switch (currentState) {
+    case STATE_IDLE:
+      ledRed(true);
+      break;
     case STATE_WAITING:
       if (now - lastBlinkTime >= BLINK_FAST_MS) {
         blinkOn = !blinkOn;
         ledYellow(blinkOn);
-        if (blinkOn) buzzerOn(); else buzzerOff();
         lastBlinkTime = now;
       }
       break;
     case STATE_DONE:
       ledRed(true);
-      buzzerOn();
       break;
     case STATE_ERROR:
       if (now - lastBlinkTime >= BLINK_FAST_MS) {
@@ -104,7 +87,6 @@ void loop() {
         ledGreen(blinkOn);
         ledYellow(blinkOn);
         ledRed(blinkOn);
-        if (blinkOn) buzzerOn(); else buzzerOff();
         lastBlinkTime = now;
       }
       break;
@@ -124,6 +106,3 @@ void loop() {
     }
   }
 }
-
-
-
